@@ -25,7 +25,7 @@ public class TwitterPluginStartup : IPluginStartup, IDisposable
 
     public string[] RequiredConfigurationKeys { get; } = Array.Empty<string>();
 
-    public TwitterPluginStartup(ITwitterOAuthClient twitterOAuthClient, IEventBus eventBus, IAppState appState, ILogger<TwitterPluginStartup> logger, ITwitterApiClient twitterApiClient)
+    public TwitterPluginStartup(IEventBus eventBus, IAppState appState, ILogger<TwitterPluginStartup> logger, ITwitterApiClient twitterApiClient, ITwitterOAuthClient twitterOAuthClient)
     {
         TwitterOAuthClient = twitterOAuthClient;
         EventBus = eventBus;

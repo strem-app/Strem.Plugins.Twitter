@@ -22,6 +22,10 @@
         </PackageReference>
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\Strem.Plugins.Twitter\Strem.Plugins.Twitter.csproj" />
+    </ItemGroup>
+
 
 
 </Project>
