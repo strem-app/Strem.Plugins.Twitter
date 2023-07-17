@@ -1,0 +1,131 @@
+﻿@using System.Reactive.Disposables
+@using System.Reactive.Linq
+@using Strem.Core.Events.Bus
+@using Strem.Core.Extensions
+@using Strem.Core.State
+@using Strem.Plugins.Twitter.Events.OAuth
+@using Strem.Plugins.Twitter.Extensions
+@using Strem.Plugins.Twitter.Services.OAuth
+@using Strem.Plugins.Twitter.Variables
+
+@inject ITwitterOAuthClient TwitterOAuthClient
+@inject IAppState AppState
+@inject IEventBus EventBus
+
+@implements IDisposable
+
+<div class="columns">
+    
+    <div class="column">
+        <label class="label">Twitter Client Details</label>
+        <div class="field">
+            <div class="control is-expanded">
+                <TextInput placeholder="Client Id" @bind-Value="@ClientId"/>
+            </div>
+            <HelperInfo>Due to Twitter API Usages you wil need to provide your own Client Id which has paid for access</HelperInfo>
+        </div>
+    
+        <label class="label">Connected Account</label>
+        <div class="field has-addons">
+            <div class="control is-expanded">
+                <input class="input" type="text" placeholder="Account Not Linked" value="@Username" disabled/>
+            </div>
+            <div class="control">
+                @if (IsTwitterAccountLinked && !HavePermissionsChanged)
+                {
+                    <a class="button is-danger" @onclick="DisconnectFromTwitter">Disconnect From Twitter</a>
+                }
+                else if (IsTwitterAccountLinked && HavePermissionsChanged)
+                {
+                    <a class="button is-warning" @onclick="ConnectToTwitter">Request New Permissions</a>
+                }
+                else
+                {
+                    <a class="button is-success" @onclick="ConnectToTwitter">Connect To Twitter</a>
+                }
+            </div>
+        </div>
+    </div>
+    
+</div>
+
+<label class="label">Requested Privilages</label>
+<TwitterScopes ExistingScopes="CurrentScopes" OnScopesChanged="RequestNewScopeAccess"></TwitterScopes>
+
+@code {
+    
+    private CompositeDisposable _subs = new();
+    
+    public string Username { get; set; }
+    public bool IsTwitterAccountLinked { get; set; }
+    public bool HavePermissionsChanged { get; set; }
+    public string[] CurrentScopes { get; set; } = Array.Empty<string>();
+    public string[] NewScopes { get; set; } = Array.Empty<string>();
+    
+    public string ClientId
+    {
+        get => AppState.AppVariables.Get(TwitterVars.ClientId);
+        set => AppState.AppVariables.Set(TwitterVars.ClientId, value);
+    }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        IsTwitterAccountLinked = AppState.HasTwitterOAuth();
+        Username = AppState.AppVariables.Get(TwitterVars.Username);
+        ClientId = AppState.AppVariables.Get(TwitterVars.ClientId);
+
+        if (IsTwitterAccountLinked)
+        {
+            CurrentScopes = AppState.GetTwitterScopes();
+            NewScopes = CurrentScopes.ToArray();
+            Username = AppState.GetTwitterUsername();
+        }
+
+        AppState.AppVariables.OnVariableChanged
+            .Where(x => x.Key == TwitterVars.Username)
+            .Subscribe(x =>
+            {
+                Username = AppState.GetTwitterUsername();
+                InvokeAsync(StateHasChanged);
+            })
+            .AddTo(_subs);
+        
+        EventBus.Receive<TwitterOAuthSuccessEvent>()
+            .Subscribe(x =>
+            {
+                IsTwitterAccountLinked = true;
+                InvokeAsync(StateHasChanged);
+            })
+            .AddTo(_subs);        
+        
+        EventBus.Receive<TwitterOAuthRevokedEvent>()
+            .Subscribe(x =>
+            {
+                IsTwitterAccountLinked = false;
+                Username = string.Empty;
+                InvokeAsync(StateHasChanged);
+            })
+            .AddTo(_subs);
+    }
+
+    public void ConnectToTwitter()
+    {
+        TwitterOAuthClient.StartAuthorisationProcess(NewScopes);
+    }
+
+    public void DisconnectFromTwitter()
+    {
+        TwitterOAuthClient.RevokeToken();
+    }
+    
+    public void RequestNewScopeAccess(string[] newScopes)
+    {
+        NewScopes = newScopes;
+        HavePermissionsChanged = true;
+    }
+
+    public void Dispose()
+    {
+        _subs?.Dispose();  
+    } 
+}
